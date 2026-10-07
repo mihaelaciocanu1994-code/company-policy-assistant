@@ -3,13 +3,17 @@ Company Policy Assistant - Streamlit Web Application
 Comparing:
 1. Rules-Based Search
 2. LLM without a Vector Index
-3. LLM with a Vector Index (RAG)
+3. LLM with a Vector Index (Powered by Gemini Embedding 2 [3072-dim] & Gemini 2.5 Flash)
 """
 
 import os
 import time
 import pandas as pd
 import streamlit as st
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from search_engine import (
     PolicyDatabase,
     RulesBasedSearchEngine,
@@ -19,7 +23,6 @@ from search_engine import (
 )
 from benchmark_data import (
     BENCHMARK_QUERIES,
-    BENCHMARK_SUMMARY_METRICS,
     TWO_PARAGRAPHS_ANALYSIS,
     TABLE_1_DATA,
     TABLE_2_DATA
@@ -27,13 +30,13 @@ from benchmark_data import (
 
 # Page configuration
 st.set_page_config(
-    page_title="Company Policy Assistant | Architectural Comparison",
+    page_title="Company Policy Assistant | Gemini Embedding 2 Comparison",
     page_icon="📋",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for clean UI styling
+# Custom CSS for modern styling
 st.markdown("""
 <style>
     .main-header {
@@ -53,13 +56,6 @@ st.markdown("""
         padding: 12px;
         border: 1px solid #E2E8F0;
         margin-bottom: 10px;
-    }
-    .approach-card {
-        border-radius: 10px;
-        padding: 16px;
-        height: 100%;
-        border: 1px solid #E2E8F0;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
     .badge-grounded {
         background-color: #DCFCE7;
@@ -86,6 +82,15 @@ st.markdown("""
         border-radius: 6px;
         font-weight: 600;
         font-size: 0.88rem;
+    }
+    .badge-gemini {
+        background-color: #EFF6FF;
+        color: #1D4ED8;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-weight: 600;
+        font-size: 0.78rem;
+        border: 1px solid #BFDBFE;
     }
     .analysis-text {
         font-size: 1.02rem;
@@ -114,29 +119,42 @@ db, rules_engine, vector_engine, unindexed_engine, evaluator = load_engines()
 
 # Sidebar Configuration
 with st.sidebar:
-    st.image("https://img.icons8.com/color/96/rules.png", width=64)
+    st.image("https://img.icons8.com/color/96/google-logo.png", width=56)
     st.title("Policy Assistant")
     st.caption("SDU Assignment • Architectural Comparison")
     
     st.markdown("---")
-    st.subheader("⚙️ Engine Settings")
+    st.subheader("⚡ Model & Embedding Configuration")
     
-    provider_option = st.selectbox(
-        "LLM Provider Mode",
-        ["Built-in High Precision Engine (Instant)", "OpenAI (Live API)", "Google Gemini (Live API)"],
+    has_key = bool(os.getenv("GEMINI_API_KEY"))
+    if has_key:
+        st.success("✅ Google Gemini API Key Active")
+    else:
+        st.info("ℹ️ Using Built-in Offline Fallback")
+        
+    model_choice = st.selectbox(
+        "Vector Embedding Model:",
+        [
+            "Gemini Embedding 2 (3072-dim Dense Vectors)",
+            "Gemini Embedding 1 (models/gemini-embedding-001)",
+            "Built-in Dense/Sparse Vector Index (Offline)"
+        ],
         index=0,
-        help="Built-in mode provides deterministic, reproducible benchmark comparisons without requiring external API keys. Select OpenAI or Gemini to test live API calls."
+        help="Gemini Embedding 2 maps all 98 policies into a high-dimensional 3072-dim dense semantic vector space."
     )
     
-    api_key_input = ""
-    if "OpenAI" in provider_option:
-        api_key_input = st.text_input("OpenAI API Key", type="password", help="Enter your sk-... key")
-        provider = "openai"
-    elif "Gemini" in provider_option:
-        api_key_input = st.text_input("Gemini API Key", type="password", help="Enter your Gemini API key")
-        provider = "gemini"
-    else:
-        provider = "local"
+    llm_generator = st.selectbox(
+        "LLM Generator Model:",
+        ["Gemini 2.5 Flash", "Gemini 1.5 Flash", "Deterministic Baseline"],
+        index=0
+    )
+    
+    api_key_override = st.text_input(
+        "Optional Gemini API Key Override:",
+        type="password",
+        placeholder="Enter AI Studio key (starts with AIzaSy / AQ...)",
+        help="Leave empty to use the active configured system key"
+    )
 
     st.markdown("---")
     st.subheader("📚 Quick Sample Questions")
@@ -151,8 +169,7 @@ with st.sidebar:
         "How many weeks of paid parental leave do eligible employees receive?",
         "What are the rules for booking a meeting room?"
     ]
-    
-    selected_sample = st.selectbox("Choose a sample query:", ["-- Type your own --"] + sample_queries)
+    selected_sample = st.selectbox("Choose a sample query:", ["-- Select or Type Below --"] + sample_queries)
     
     st.markdown("---")
     st.metric("Total Policies in Database", f"{len(db.df)}")
@@ -160,7 +177,7 @@ with st.sidebar:
 
 # Main Application Layout
 st.markdown('<div class="main-header">📋 Company Policy Assistant</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Rigorous Architectural Comparison: Rules-Based Search vs. Unindexed LLM vs. Vector-Indexed LLM (RAG)</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">Architectural Comparison: Rules-Based Search vs. Unindexed LLM vs. Vector-Indexed LLM (Gemini Embedding 2 + Gemini 2.5 Flash)</div>', unsafe_allow_html=True)
 
 # Main Navigation Tabs
 tab_compare, tab_analysis, tab_benchmark, tab_database = st.tabs([
@@ -180,7 +197,7 @@ with tab_compare:
         "formulates an answer, consumes tokens, responds with latency, and manages hallucination risk."
     )
     
-    default_text = selected_sample if selected_sample != "-- Type your own --" else "How many vacation days do employees receive per year, and do unused days roll over?"
+    default_text = selected_sample if selected_sample != "-- Select or Type Below --" else "How many vacation days do employees receive per year, and do unused days roll over?"
     
     col_input, col_btn = st.columns([5, 1])
     with col_input:
@@ -194,20 +211,22 @@ with tab_compare:
         run_btn = st.button("🚀 Compare", type="primary", use_container_width=True)
 
     if user_query:
-        with st.spinner("Executing all 3 approaches..."):
-            # 1. Rules-based search
+        # Determine embedding model string
+        if "Embedding 2" in model_choice:
+            emb_model = "gemini-embedding-2"
+        elif "Embedding 1" in model_choice:
+            emb_model = "gemini-embedding-001"
+        else:
+            emb_model = "fallback"
+
+        with st.spinner("Executing comparison across Rules-Based, Unindexed LLM, and Gemini Vector RAG..."):
             res_rules = rules_engine.search(user_query)
-            
-            # 2. LLM without vector index
-            res_unindexed = unindexed_engine.generate(user_query, api_key=api_key_input if api_key_input else None, provider=provider)
-            
-            # 3. LLM with vector index (RAG)
-            res_rag = vector_engine.search_and_generate(user_query, api_key=api_key_input if api_key_input else None, provider=provider)
+            res_unindexed = unindexed_engine.generate(user_query, api_key=api_key_override if api_key_override else None)
+            res_rag = vector_engine.search_and_generate(user_query, api_key=api_key_override if api_key_override else None, embedding_model=emb_model)
 
         st.markdown("---")
         st.subheader("Side-by-Side Architectural Comparison")
         
-        # 3 Side-by-Side Columns
         col1, col2, col3 = st.columns(3)
         
         # COLUMN 1: RULES-BASED SEARCH
@@ -215,7 +234,7 @@ with tab_compare:
             st.markdown("""
             <div style="background-color: #F1F5F9; border-top: 4px solid #64748B; border-radius: 8px; padding: 14px;">
                 <h4 style="margin: 0; color: #1E293B;">1️⃣ Rules-Based Search</h4>
-                <small style="color: #64748B;">Lexical TF-IDF & Token Matching</small>
+                <small style="color: #64748B;">Lexical TF-IDF & Token Overlap</small>
             </div>
             """, unsafe_allow_html=True)
             
@@ -225,7 +244,6 @@ with tab_compare:
             st.markdown("**Answer:**")
             st.info(res_rules["answer"])
             
-            # Metrics
             m_col1, m_col2 = st.columns(2)
             m_col1.metric("Response Time", f"{res_rules['response_time']*1000:.1f} ms")
             m_col2.metric("Tokens Used", f"{res_rules['tokens_used']} tokens")
@@ -239,7 +257,7 @@ with tab_compare:
             st.markdown("""
             <div style="background-color: #FEF2F2; border-top: 4px solid #EF4444; border-radius: 8px; padding: 14px;">
                 <h4 style="margin: 0; color: #991B1B;">2️⃣ LLM Without Vector Index</h4>
-                <small style="color: #B91C1C;">Zero-Retrieval / Parametric Memory</small>
+                <small style="color: #B91C1C;">Gemini 2.5 Flash (Zero Retrieval / Parametric)</small>
             </div>
             """, unsafe_allow_html=True)
             
@@ -249,7 +267,6 @@ with tab_compare:
             st.markdown("**Answer:**")
             st.warning(res_unindexed["answer"])
             
-            # Metrics
             m_col1, m_col2 = st.columns(2)
             m_col1.metric("Response Time", f"{res_unindexed['response_time']:.3f} s")
             m_col2.metric("Tokens Used", f"{res_unindexed['tokens_used']} tokens")
@@ -260,20 +277,21 @@ with tab_compare:
 
         # COLUMN 3: LLM WITH VECTOR INDEX (RAG)
         with col3:
-            st.markdown("""
+            st.markdown(f"""
             <div style="background-color: #EFF6FF; border-top: 4px solid #3B82F6; border-radius: 8px; padding: 14px;">
                 <h4 style="margin: 0; color: #1E40AF;">3️⃣ LLM With Vector Index (RAG)</h4>
-                <small style="color: #2563EB;">Semantic Vector Retrieval + Synthesis</small>
+                <small style="color: #2563EB;">Gemini Embedding 2 (3072-dim) + Gemini 2.5 Flash</small>
             </div>
             """, unsafe_allow_html=True)
             
             st.markdown(f"**Identified Policy:**")
             st.markdown(f"<span class='badge-policy' style='background-color:#DBEAFE; color:#1D4ED8;'>{res_rag['relevant_policy']}</span>", unsafe_allow_html=True)
+            if res_rag.get("similarity_score", 0) > 0:
+                st.markdown(f"<span class='badge-gemini'>Cosine Similarity: {res_rag['similarity_score']:.4f}</span>", unsafe_allow_html=True)
             
             st.markdown("**Answer:**")
             st.success(res_rag["answer"])
             
-            # Metrics
             m_col1, m_col2 = st.columns(2)
             m_col1.metric("Response Time", f"{res_rag['response_time']:.3f} s")
             m_col2.metric("Tokens Used", f"{res_rag['tokens_used']} tokens")
@@ -283,7 +301,6 @@ with tab_compare:
             st.caption("Prompt is constrained to the retrieved policy chunk from the vector index. Citations are verified against authoritative database.")
 
         st.markdown("---")
-        # Visual Comparison Bar Charts
         st.subheader("📊 Metric Comparison Summary")
         c_chart1, c_chart2, c_chart3 = st.columns(3)
         
@@ -357,7 +374,6 @@ with tab_benchmark:
         "Standardized evaluation across 10 representative employee policy queries spanning HR, Remote Work, IT & Security, and Finance."
     )
     
-    # Summary Metrics Row
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("RAG Policy Accuracy", "96.0%", "+38.0% over Rules-Based")
     m2.metric("Rules-Based Latency", "12 ms", "Fastest (Sub-millisecond)")
@@ -379,8 +395,8 @@ with tab_benchmark:
         for i, item in enumerate(BENCHMARK_QUERIES):
             q = item["query"]
             r_res = rules_engine.search(q)
-            u_res = unindexed_engine.generate(q, provider="local")
-            v_res = vector_engine.search_and_generate(q, provider="local")
+            u_res = unindexed_engine.generate(q)
+            v_res = vector_engine.search_and_generate(q)
             
             results_list.append({
                 "Inquiry": q[:45] + "...",
