@@ -117,18 +117,26 @@ if __name__ == "__main__":
         run_test_cli(test_q)
         sys.exit(0)
 
-    if not bot_token or not app_token or "xoxb" not in bot_token or "xapp" not in app_token:
-        print("\n" + "="*60)
-        print("⚠️  SLACK TOKENS NOT CONFIGURED YET")
-        print("="*60)
-        print("To connect this bot to your Slack Workspace, please add:")
-        print("1. SLACK_BOT_TOKEN (starts with xoxb-...)")
-        print("2. SLACK_APP_TOKEN (starts with xapp-...)")
-        print("to your .env file at:")
-        print(f"   {os.path.abspath('.env')}\n")
-        print("You can test the bot logic right now in the terminal using:")
-        print("   python slack_bot.py --test \"How many vacation days do I get?\"")
-        print("="*60 + "\n")
+    is_placeholder = any(p in (bot_token or "") or p in (app_token or "") for p in ["your-bot-token-here", "your-app-token-here", "placeholder"])
+    is_valid_format = bot_token and app_token and bot_token.startswith("xoxb-") and app_token.startswith("xapp-") and len(bot_token) > 30 and len(app_token) > 30
+
+    if not is_valid_format or is_placeholder:
+        print("\n" + "="*65)
+        print("⚠️  SLACK TOKENS NOT CONFIGURED (PLACEHOLDERS DETECTED)")
+        print("="*65)
+        print("Your .env file currently contains placeholder values:")
+        print(f"   SLACK_BOT_TOKEN = {bot_token}")
+        print(f"   SLACK_APP_TOKEN = {app_token}")
+        print("\nYou must replace these with your REAL Slack tokens from api.slack.com:")
+        print("1. SLACK_BOT_TOKEN:")
+        print("   Go to https://api.slack.com/apps -> Your App -> OAuth & Permissions")
+        print("   Copy 'Bot User OAuth Token' (starts with xoxb-..., ~55 characters)")
+        print("2. SLACK_APP_TOKEN:")
+        print("   Go to https://api.slack.com/apps -> Your App -> Basic Information -> App-Level Tokens")
+        print("   (or Socket Mode tab) -> Copy token (starts with xapp-..., ~80 characters)")
+        print("\nEdit your .env file at:")
+        print(f"   {os.path.abspath('.env')}")
+        print("="*65 + "\n")
         sys.exit(1)
 
     try:
